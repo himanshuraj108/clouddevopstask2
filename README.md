@@ -10,7 +10,7 @@ A production-ready **MERN** (MongoDB, Express.js, React + Vite, Node.js) full-st
 |--------|------|--------|
 | Himanshu Raj | Team Lead / Backend | @member1 |
 | Prabhat Kumar | Frontend Architect | @member2 |
-| Satish Kumar | DevOps / Docker / K8s | @member3 |
+| Satish Kumar | DevOps / Docker / K8s | Satishkumara3 |
 | Vemula Venkata Pardhu | AWS Infrastructure | @member4 |
 | Devasi Rakesh | Testing / CI/CD | @member5 |
 
