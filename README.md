@@ -8,7 +8,7 @@ A production-ready **MERN** (MongoDB, Express.js, React + Vite, Node.js) full-st
 
 | Member | Role | GitHub |
 |--------|------|--------|
-| Member 1 | Team Lead / Backend | @member1 |
+| Himanshu Raj | Team Lead / Backend | @member1 |
 | Member 2 | Frontend Architect | @member2 |
 | Member 3 | DevOps / Docker / K8s | @member3 |
 | Member 4 | AWS Infrastructure | @member4 |
