@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  MERN App - RDS Database
+  PostgreSQL (as a robust alternative to MongoDB Atlas)
+  Multi-AZ, automated backups, encryption at rest
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+  VpcStackName:
+    Type: String
+    Default: mern-vpc-stack
+  DBName:
+    Type: String
+    Default: mernapp
+  DBUsername:
+    Type: String
+    Default: mernuser
+    NoEcho: false
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.r6g.large
+      - db.r6g.xlarge
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
+Resources:
+  # ─── DB Subnet Group ─────────────────────────────────────────────────────────
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "MERN App DB Subnet Group - ${Environment}"
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${VpcStackName}-PrivateSubnet1"
+        - Fn::ImportValue: !Sub "${VpcStackName}-PrivateSubnet2"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─── DB Parameter Group ───────────────────────────────────────────────────────
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: MERN App PostgreSQL Parameters
+      Family: postgres15
+      Parameters:
+        max_connections: '200'
+        shared_buffers: '256MB'
+        log_min_duration_statement: '1000'
+
+  # ─── Secrets Manager for DB Credentials ──────────────────────────────────────
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "/mern/${Environment}/db-credentials"
+      Description: RDS database credentials
+      SecretString: !Sub |
+        {
+          "username": "${DBUsername}",
+          "password": "${DBPassword}",
+          "host": "",
+          "port": "5432",
+          "dbname": "${DBName}"
+        }
+
+  # ─── RDS Instance ─────────────────────────────────────────────────────────────
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "mern-db-${Environment}"
+      DBName: !Ref DBName
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: '15.4'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub "${VpcStackName}-RDSSecurityGroup"
+      DBParameterGroupName: !Ref DBParameterGroup
+      AllocatedStorage: '20'
+      MaxAllocatedStorage: '100'
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: !If [IsProduction, true, false]
+      BackupRetentionPeriod: !If [IsProduction, 7, 1]
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: !If [IsProduction, true, false]
+      EnablePerformanceInsights: !If [IsProduction, true, false]
+      PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref AWS::NoValue]
+      MonitoringInterval: !If [IsProduction, 60, 0]
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: MERNApp
+
+Outputs:
+  DBEndpoint:
+    Description: RDS endpoint address
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-DBEndpoint"
+
+  DBPort:
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-DBPort"
+
+  DBSecretArn:
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DBSecretArn"

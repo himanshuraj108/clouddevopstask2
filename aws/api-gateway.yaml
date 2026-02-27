@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  MERN App - API Gateway (HTTP API)
+  Routes to ECS ALB backend service
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+  BackendALBDnsName:
+    Type: String
+    Description: Backend ALB DNS name from ECS stack
+  DomainName:
+    Type: String
+    Default: api.example.com
+  AcmCertificateArn:
+    Type: String
+    Description: ACM certificate ARN for custom domain
+
+Resources:
+  # ─── HTTP API ─────────────────────────────────────────────────────────────────
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "mern-api-${Environment}"
+      ProtocolType: HTTP
+      Description: MERN App HTTP API Gateway
+      CorsConfiguration:
+        AllowOrigins:
+          - "https://www.example.com"
+          - "https://example.com"
+        AllowMethods: [GET, POST, PUT, DELETE, OPTIONS, PATCH]
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Amz-Date
+          - X-Api-Key
+        MaxAge: 86400
+
+  # ─── Integration with ALB ─────────────────────────────────────────────────────
+  ALBIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !Sub "http://${BackendALBDnsName}/{proxy}"
+      PayloadFormatVersion: '1.0'
+      TimeoutInMillis: 29000
+
+  # ─── Routes ──────────────────────────────────────────────────────────────────
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "$default"
+      Target: !Sub "integrations/${ALBIntegration}"
+
+  AuthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /api/auth/{proxy+}"
+      Target: !Sub "integrations/${ALBIntegration}"
+
+  UsersRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /api/users/{proxy+}"
+      Target: !Sub "integrations/${ALBIntegration}"
+
+  ItemsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /api/items/{proxy+}"
+      Target: !Sub "integrations/${ALBIntegration}"
+
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /health"
+      Target: !Sub "integrations/${ALBIntegration}"
+
+  # ─── Stage ──────────────────────────────────────────────────────────────────
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 1000
+        ThrottlingRateLimit: 500
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+
+  # ─── CloudWatch Logs ─────────────────────────────────────────────────────────
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/mern-${Environment}"
+      RetentionInDays: 14
+
+  # ─── Custom Domain ────────────────────────────────────────────────────────────
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref AcmCertificateArn
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName
+      Stage: !Ref ApiStage
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  CustomDomainUrl:
+    Value: !Sub "https://${DomainName}"
