@@ -287,3 +287,5 @@ Each team member should work on a separate branch so commits are visible per per
 ## 📄 License
 
 MIT License — Free to use for academic and commercial purposes.
+
+#The website is now live through the deployed link from S3
